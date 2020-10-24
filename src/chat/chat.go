@@ -32,7 +32,7 @@ type User struct {
 // Receive reads next message from user's underlying connection.
 // It blocks until full message received.
 func (u *User) Receive() error {
-	req, err := u.readRequest()
+	req, err := u.ReadRequest()
 	if err != nil {
 		u.conn.Close()
 		return err
@@ -75,7 +75,7 @@ func (u *User) Receive() error {
 
 // readRequests reads json-rpc request from connection.
 // It takes io mutex.
-func (u *User) readRequest() (*Request, error) {
+func (u *User) ReadRequest() (*Request, error) {
 	u.io.Lock()
 	defer u.io.Unlock()
 
