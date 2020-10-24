@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
+	"fmt"
 	"gopool"
 	"log"
 	"net"
@@ -15,6 +17,8 @@ import (
 )
 
 var (
+	certFile  = flag.String("certFile", "/home/user/ssl/crt.crt", "Certificate") // CHANGEME
+	keyFile   = flag.String("keyFile", "/home/user/ssl/key.key", "Key")          // CHANGEME
 	addr      = flag.String("listen", ":3333", "address to bind to")
 	debug     = flag.String("pprof", "", "address for pprof http")
 	workers   = flag.Int("workers", 128, "max workers count")
@@ -24,6 +28,19 @@ var (
 
 func main() {
 	flag.Parse()
+
+	// Load server's certificate and private key
+	serverCert, cErr := tls.LoadX509KeyPair(certFile, keyFile)
+
+	if cErr != nil {
+		panic(cErr)
+	}
+
+	// Create the credentials and return it
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{serverCert},
+		ClientAuth:   tls.NoClientCert,
+	}
 
 	if x := *debug; x != "" {
 		log.Printf("starting pprof server on %s", x)
@@ -52,9 +69,18 @@ func main() {
 	//
 	// We will call it below within accept() loop.
 	handle := func(conn net.Conn) {
+		tlsConn := tls.Server(conn, tlsConfig)
+
+		// run a handshake
+		hErr := tlsConn.Handshake()
+
+		if hErr != nil {
+			panic(hErr)
+		}
+
 		// NOTE: we wrap conn here to show that ws could work with any kind of
 		// io.ReadWriter.
-		safeConn := deadliner{conn, *ioTimeout}
+		safeConn := deadliner{tlsConn, *ioTimeout}
 
 		// Zero-copy upgrade to WebSocket connection.
 		hs, err := ws.Upgrade(safeConn)
@@ -90,7 +116,11 @@ func main() {
 			// We do not want to spawn a new goroutine to read single message.
 			// But we want to reuse previously spawned goroutine.
 			pool.Schedule(func() {
-				if err := user.Receive(); err != nil {
+				req, err := user.ReadRequest()
+
+				fmt.Println(req)
+
+				if err != nil {
 					// When receive failed, we can only disconnect broken
 					// connection and stop to receive events about it.
 					poller.Stop(desc)
