@@ -30,7 +30,7 @@ func main() {
 	flag.Parse()
 
 	// Load server's certificate and private key
-	serverCert, cErr := tls.LoadX509KeyPair(certFile, keyFile)
+	serverCert, cErr := tls.LoadX509KeyPair(*certFile, *keyFile)
 
 	if cErr != nil {
 		panic(cErr)
